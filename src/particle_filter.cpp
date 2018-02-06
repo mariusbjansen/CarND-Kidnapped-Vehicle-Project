@@ -75,9 +75,9 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
   }
 }
 
-void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted,
+void ParticleFilter::dataAssociation(const std::vector<LandmarkObs> landmarks,
                                      std::vector<LandmarkObs> &observations) {
-  // TODO: Find the predicted measurement that is closest to each observed
+  // TODO: Find the landmarks measurement that is closest to each observed
   // measurement and assign the
   //   observed measurement to this particular landmark.
   // NOTE: this method will NOT be called by the grading code. But you will
@@ -88,7 +88,7 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted,
   for (auto obs : observations) {
     double dist_min = numeric_limits<double>::max();
 
-    for (auto pred : predicted) {
+    for (auto pred : landmarks) {
       double dist_curr = dist(obs.x, obs.y, pred.x, pred.y);
 
       if (dist_curr < dist_min) {
@@ -118,6 +118,56 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
   //   (look at equation
   //   3.33
   //   http://planning.cs.uiuc.edu/node99.html
+
+  // transform map to observation list
+  vector<LandmarkObs> landmarks(map_landmarks.landmark_list.size());
+  for (auto landmark : map_landmarks.landmark_list) {
+    LandmarkObs lm;
+    lm.x = landmark.x_f;
+    lm.y = landmark.y_f;
+    lm.id = landmark.id_i;
+    landmarks.push_back(lm);
+  }
+
+  // for each particle transform observations to gloabl coordinate system
+  for (auto particle : particles) {
+    std::vector<LandmarkObs> particles_obs_global(observations.size());
+    for (auto obs : observations) {
+      LandmarkObs obs_global;
+      obs_global.x = cos(particle.theta) * obs.x - sin(particle.theta) * obs.y +
+                     particle.x;
+      obs_global.y = sin(particle.theta) * obs.x + cos(particle.theta) * obs.y +
+                     particle.y;
+
+      particles_obs_global.push_back(obs_global);
+    }
+
+    // data association with result that particles_obs_global has most likely ID
+    dataAssociation(landmarks, particles_obs_global);
+
+    // weighting
+    particle.weight = 1.0;
+
+    for (auto particle_obs_glob : particles_obs_global) {
+      for (auto landmark : landmarks) {
+        if (particle_obs_glob.id == landmark.id) {
+          double po_x, po_y, lm_x, lm_y, std_x, std_y, fact;
+          po_x = particle_obs_glob.x;
+          po_y = particle_obs_glob.y;
+          lm_x = landmark.x;
+          lm_y = landmark.y;
+          std_x = std_landmark[0];
+          std_y = std_landmark[1];
+
+          fact = 1 / (2 * M_PI * std_x * std_y) *
+                 exp(0.5 * (pow((lm_x - po_x) / std_x, 2) +
+                            pow((lm_y - po_y) / std_y, 2)));
+
+          particle.weight *= fact;
+        }
+      }
+    }
+  }
 }
 
 void ParticleFilter::resample() {
