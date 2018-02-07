@@ -20,7 +20,7 @@
 using namespace std;
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
-  // TODO: Set the number of particles. Initialize all particles to first
+  // DONE: Set the number of particles. Initialize all particles to first
   // position (based on estimates of
   //   x, y, theta and their uncertainties from GPS) and all weights to 1.
   // Add random Gaussian noise to each particle.
@@ -46,7 +46,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 
 void ParticleFilter::prediction(double delta_t, double std_pos[],
                                 double velocity, double yaw_rate) {
-  // TODO: Add measurements to each particle and add random Gaussian noise.
+  // DONE: Add measurements to each particle and add random Gaussian noise.
   // NOTE: When adding noise you may find std::normal_distribution and
   // std::default_random_engine useful.
   //  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
@@ -77,7 +77,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
 
 void ParticleFilter::dataAssociation(const std::vector<LandmarkObs> landmarks,
                                      std::vector<LandmarkObs> &observations) {
-  // TODO: Find the landmarks measurement that is closest to each observed
+  // DONE: Find the landmarks measurement that is closest to each observed
   // measurement and assign the
   //   observed measurement to this particular landmark.
   // NOTE: this method will NOT be called by the grading code. But you will
@@ -102,7 +102,7 @@ void ParticleFilter::dataAssociation(const std::vector<LandmarkObs> landmarks,
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                                    const std::vector<LandmarkObs> &observations,
                                    const Map &map_landmarks) {
-  // TODO: Update the weights of each particle using a mult-variate Gaussian
+  // DONE: Update the weights of each particle using a mult-variate Gaussian
   // distribution. You can read
   //   more about this distribution here:
   //   https://en.wikipedia.org/wiki/Multivariate_normal_distribution
@@ -171,10 +171,33 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 }
 
 void ParticleFilter::resample() {
-  // TODO: Resample particles with replacement with probability proportional to
+  // DONE: Resample particles with replacement with probability proportional to
   // their weight.
   // NOTE: You may find std::discrete_distribution helpful here.
   //   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
+
+  // starting index using uniform random distribution int
+  uniform_int_distribution<> uni_distribution_int(0, num_particles - 1);
+  auto index = uni_distribution_int(gen);
+
+  // distribution for drawing using uniform random distribution double
+  uniform_real_distribution<> uni_distribution_double(0.0, 1.0);
+
+  auto mw = *max_element(weights.begin(), weights.end());
+  double beta = 0.0;
+
+  vector<Particle> resampled(particles.size());
+
+  for (auto particle : particles) {
+    beta += uni_distribution_double(gen) * 2.0 * mw;
+    while (beta > particle.weight) {
+      beta -= particle.weight;
+      index = (index + 1) % num_particles;
+    }
+    resampled.push_back(particles.at(index));
+  }
+
+  particles = resampled;
 }
 
 Particle ParticleFilter::SetAssociations(Particle &particle,
