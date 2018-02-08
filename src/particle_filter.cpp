@@ -5,11 +5,11 @@
  *      Author: Tiffany Huang
  */
 
+#include <math.h>
 #include <algorithm>
 #include <iostream>
 #include <iostream>
 #include <iterator>
-#include <math.h>
 #include <numeric>
 #include <random>
 #include <sstream>
@@ -27,17 +27,17 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
   // NOTE: Consult particle_filter.h for more information about this method (and
   // others in this file).
 
-  std::normal_distribution<double> distrib_x{x, std[0]};
-  std::normal_distribution<double> distrib_y{y, std[1]};
-  std::normal_distribution<double> distrib_theta{theta, std[2]};
+  normal_distribution<double> distrib_x{0, std[0]};
+  normal_distribution<double> distrib_y{0, std[1]};
+  normal_distribution<double> distrib_theta{0, std[2]};
 
   num_particles = 100;
-  particles.reserve(num_particles);
+  particles.resize(num_particles);
 
   for (auto &particle : particles) {
-    particle.x = distrib_x(gen);
-    particle.y = distrib_y(gen);
-    particle.theta = distrib_theta(gen);
+    particle.x = x + distrib_x(gen);
+    particle.y = y + distrib_y(gen);
+    particle.theta = theta + distrib_theta(gen);
     particle.weight = 1.0;
   }
 
@@ -53,17 +53,24 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
   //  http://www.cplusplus.com/reference/random/default_random_engine/
 
   for (auto &particle : particles) {
-    // deterministic prediction
-    particle.x +=
-        velocity / yaw_rate *
-        (sin(particle.theta + yaw_rate * delta_t) - sin(particle.theta));
+    // deterministic prediction with numerical stability check ()
 
-    particle.y +=
-        velocity / yaw_rate *
-        (cos(particle.theta) - cos(particle.theta + yaw_rate * delta_t));
+    if (fabs(yaw_rate) < 1E-4) {
+      // equations from the Udacity fusion model
+      particle.x += velocity * delta_t * cos(particle.theta);
+      particle.y += velocity * delta_t * sin(particle.theta);
+      particle.theta += yaw_rate * delta_t;
+    } else {
+      particle.x +=
+          velocity / yaw_rate *
+          (sin(particle.theta + yaw_rate * delta_t) - sin(particle.theta));
 
-    particle.theta += yaw_rate * delta_t;
+      particle.y +=
+          velocity / yaw_rate *
+          (cos(particle.theta) - cos(particle.theta + yaw_rate * delta_t));
 
+      particle.theta += yaw_rate * delta_t;
+    }
     // adding noise
     std::normal_distribution<double> distrib_x{particle.x, std_pos[0]};
     std::normal_distribution<double> distrib_y{particle.y, std_pos[1]};
@@ -85,7 +92,7 @@ void ParticleFilter::dataAssociation(const std::vector<LandmarkObs> landmarks,
   //   implement this method and use it as a helper during the updateWeights
   //   phase.
 
-  for (auto obs : observations) {
+  for (auto &obs : observations) {
     double dist_min = numeric_limits<double>::max();
 
     for (auto pred : landmarks) {
@@ -120,18 +127,23 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
   //   http://planning.cs.uiuc.edu/node99.html
 
   // transform map to observation list
-  vector<LandmarkObs> landmarks(map_landmarks.landmark_list.size());
-  for (auto landmark : map_landmarks.landmark_list) {
-    LandmarkObs lm;
-    lm.x = landmark.x_f;
-    lm.y = landmark.y_f;
-    lm.id = landmark.id_i;
-    landmarks.push_back(lm);
-  }
 
   // for each particle transform observations to gloabl coordinate system
-  for (auto particle : particles) {
-    std::vector<LandmarkObs> particles_obs_global(observations.size());
+  for (auto &particle : particles) {
+    vector<LandmarkObs> landmarks;
+    for (auto landmark : map_landmarks.landmark_list) {
+      LandmarkObs lm;
+      lm.x = landmark.x_f;
+      lm.y = landmark.y_f;
+      lm.id = landmark.id_i;
+
+      if ((fabs(lm.x - particle.x) <= sensor_range) &&
+          (fabs(lm.y - particle.y) <= sensor_range)) {
+        landmarks.push_back(lm);
+      }
+    }
+
+    std::vector<LandmarkObs> particles_obs_global;
     for (auto obs : observations) {
       LandmarkObs obs_global;
       obs_global.x = cos(particle.theta) * obs.x - sin(particle.theta) * obs.y +
@@ -160,8 +172,8 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
           std_y = std_landmark[1];
 
           fact = 1 / (2 * M_PI * std_x * std_y) *
-                 exp(0.5 * (pow((lm_x - po_x) / std_x, 2) +
-                            pow((lm_y - po_y) / std_y, 2)));
+                 exp(-0.5 * (pow((lm_x - po_x) / std_x, 2) +
+                             pow((lm_y - po_y) / std_y, 2)));
 
           particle.weight *= fact;
         }
@@ -176,6 +188,12 @@ void ParticleFilter::resample() {
   // NOTE: You may find std::discrete_distribution helpful here.
   //   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
 
+  // currently global weights are empty -> copy to member
+  vector<double> weights;
+  for (int i = 0; i < num_particles; i++) {
+    weights.push_back(particles[i].weight);
+  }
+
   // starting index using uniform random distribution int
   uniform_int_distribution<> uni_distribution_int(0, num_particles - 1);
   auto index = uni_distribution_int(gen);
@@ -186,12 +204,12 @@ void ParticleFilter::resample() {
   auto mw = *max_element(weights.begin(), weights.end());
   double beta = 0.0;
 
-  vector<Particle> resampled(particles.size());
+  vector<Particle> resampled;
 
   for (auto particle : particles) {
     beta += uni_distribution_double(gen) * 2.0 * mw;
-    while (beta > particle.weight) {
-      beta -= particle.weight;
+    while (beta > particles.at(index).weight) {
+      beta -= particles.at(index).weight;
       index = (index + 1) % num_particles;
     }
     resampled.push_back(particles.at(index));
@@ -220,7 +238,7 @@ string ParticleFilter::getAssociations(Particle best) {
   stringstream ss;
   copy(v.begin(), v.end(), ostream_iterator<int>(ss, " "));
   string s = ss.str();
-  s = s.substr(0, s.length() - 1); // get rid of the trailing space
+  s = s.substr(0, s.length() - 1);  // get rid of the trailing space
   return s;
 }
 string ParticleFilter::getSenseX(Particle best) {
@@ -228,7 +246,7 @@ string ParticleFilter::getSenseX(Particle best) {
   stringstream ss;
   copy(v.begin(), v.end(), ostream_iterator<float>(ss, " "));
   string s = ss.str();
-  s = s.substr(0, s.length() - 1); // get rid of the trailing space
+  s = s.substr(0, s.length() - 1);  // get rid of the trailing space
   return s;
 }
 string ParticleFilter::getSenseY(Particle best) {
@@ -236,6 +254,6 @@ string ParticleFilter::getSenseY(Particle best) {
   stringstream ss;
   copy(v.begin(), v.end(), ostream_iterator<float>(ss, " "));
   string s = ss.str();
-  s = s.substr(0, s.length() - 1); // get rid of the trailing space
+  s = s.substr(0, s.length() - 1);  // get rid of the trailing space
   return s;
 }
