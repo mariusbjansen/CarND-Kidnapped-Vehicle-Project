@@ -9,11 +9,10 @@
 #ifndef PARTICLE_FILTER_H_
 #define PARTICLE_FILTER_H_
 
-#include "helper_functions.h"
 #include <random>
+#include "helper_functions.h"
 
 struct Particle {
-
   int id;
   double x;
   double y;
@@ -25,7 +24,6 @@ struct Particle {
 };
 
 class ParticleFilter {
-
   // Number of particles to draw
   int num_particles;
 
@@ -38,7 +36,7 @@ class ParticleFilter {
   // Random variable generator
   std::default_random_engine gen;
 
-public:
+ public:
   // Set of current particles
   std::vector<Particle> particles;
 

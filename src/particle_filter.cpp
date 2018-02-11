@@ -53,7 +53,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
   //  http://www.cplusplus.com/reference/random/default_random_engine/
 
   for (auto &particle : particles) {
-    // deterministic prediction with numerical stability check ()
+    // deterministic prediction with numerical stability check
 
     if (fabs(yaw_rate) < 1E-4) {
       // equations from the Udacity fusion model
@@ -126,8 +126,6 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
   //   3.33
   //   http://planning.cs.uiuc.edu/node99.html
 
-  // transform map to observation list
-
   // for each particle transform observations to gloabl coordinate system
   for (auto &particle : particles) {
     vector<LandmarkObs> landmarks;
@@ -156,8 +154,6 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
     // data association with result that particles_obs_global has most likely ID
     dataAssociation(landmarks, particles_obs_global);
-
-    // weighting
     particle.weight = 1.0;
 
     for (auto particle_obs_glob : particles_obs_global) {
@@ -218,6 +214,7 @@ void ParticleFilter::resample() {
   particles = resampled;
 }
 
+// below function is not used
 Particle ParticleFilter::SetAssociations(Particle &particle,
                                          const std::vector<int> &associations,
                                          const std::vector<double> &sense_x,
