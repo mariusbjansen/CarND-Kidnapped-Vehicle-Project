@@ -129,6 +129,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
   // for each particle transform observations to gloabl coordinate system
   for (auto &particle : particles) {
     vector<LandmarkObs> landmarks;
+    bool lmFound = false;
     for (auto landmark : map_landmarks.landmark_list) {
       LandmarkObs lm;
       lm.x = landmark.x_f;
@@ -138,6 +139,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
       if ((fabs(lm.x - particle.x) <= sensor_range) &&
           (fabs(lm.y - particle.y) <= sensor_range)) {
         landmarks.push_back(lm);
+        lmFound = true;
       }
     }
 
@@ -154,7 +156,11 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
     // data association with result that particles_obs_global has most likely ID
     dataAssociation(landmarks, particles_obs_global);
-    particle.weight = 1.0;
+    if (lmFound) {
+      particle.weight = 1.0;
+    } else {
+      particle.weight = 0.0;
+    }
 
     for (auto particle_obs_glob : particles_obs_global) {
       for (auto landmark : landmarks) {
